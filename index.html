@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바이럴 국가 수익성 계산기 — 죽은 트래픽 경고</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);min-height:100vh;color:#e0e0e0;padding:20px}
+.container{max-width:900px;margin:0 auto}
+h1{text-align:center;font-size:1.8rem;margin-bottom:8px;color:#fff}
+.subtitle{text-align:center;color:#a0a0c0;margin-bottom:24px;font-size:.95rem}
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:20px;margin-bottom:16px;backdrop-filter:blur(10px)}
+.card h2{font-size:1.1rem;margin-bottom:12px-color:#00d2ff}
+label{display:block;font-size:.85rem;color:#b0b0d0;margin-bottom:4px}
+input,select{width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(0,0,0,.3);color:#e0e0e0;font-size:.95rem;margin-bottom:12px}
+input:focus,select:focus{outline:none;border-color:#00d2ff}
+.btn{display:inline-block;padding:10px 24px;border:none;border-radius:8px;cursor:pointer;font-size:.95rem;font-weight:600;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,#00d2ff,#3a7bd5);color:#fff}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,210,255,.4)}
+.btn-danger{background:rgba(231,76,60,.2);color:#e74c3c;border:1px solid rgba(231,76,60,.3)}
+.btn-sm{padding:6px 14px;font-size:.8rem}
+.country-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.country-item{border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;cursor:pointer;transition:all .2s;font-size:.8rem;display:flex;align-items:center;gap:6px}
+.country-item:hover{border-color:rgba(0,210,255,.5)}
+.country-item.selected{border-color:#00d2ff;background:rgba(0,210,255,.1)}
+.country-item .flag{font-size:1.2rem}
+.country-item .name{flex:1}
+.country-item .score{font-size:.7rem;color:#00d2ff}
+.result-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.result-table th,.result-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+.result-table th{color:#00d2ff;font-weight:600;font-size:.8rem}
+.result-table tr:hover{background:rgba(255,255,255,.03)}
+.dead-traffic{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);border-radius:8px;padding:12px;margin:10px 0;font-size:.85rem}
+.dead-traffic .icon{font-size:1.2rem;margin-right:6px}
+.bar-chart{margin:12px 0}
+.bar-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:.8rem}
+.bar-row .label{width:80px;text-align:right;color:#b0b0d0}
+.bar-row .bar{flex:1;height:18px;background:rgba(0,0,0,.3);border-radius:9px;overflow:hidden}
+.bar-row .fill{height:100%;border-radius:9px;transition:width .5s}
+.bar-row .val{width:80px;font-weight:600}
+.empty{text-align:center;color:#666;padding:20px;font-size:.9rem}
+@media(max-width:600px){.country-grid{grid-template-columns:repeat(2,1fr)}h1{font-size:1.4rem}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🌍 바이럴 국가 수익성 계산기</h1>
+<p class="subtitle">트래픽 × 결제가능성 × ARPU = 실질 수익</p>
+
+<div class="card">
+<h2>🌐 국가 선택 (다중 선택)</h2>
+<div class="country-grid" id="countryGrid"></div>
+</div>
+
+<div class="card">
+<h2>📊 예상 트래픽 입력</h2>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<div style="flex:1;min-width:200px">
+  <label>월간 예상 방문자 수</label>
+  <input id="traffic" type="number" min="0" placeholder="예: 100000">
+</div>
+<div style="flex:1;min-width:200px">
+  <label>전환율 (%)</label>
+  <input id="conversion" type="number" min="0" max="100" step="0.1" placeholder="예: 2">
+</div>
+</div>
+</div>
+
+<div style="text-align:center;margin:16px 0">
+<button class="btn btn-primary" onclick="calculate()">💰 실질 수익 계산</button>
+</div>
+
+<div id="result"></div>
+
+<div class="card">
+<h2>📜 계산 기록</h2>
+<div id="history"></div>
+<div style="margin-top:12px;text-align:right">
+<button class="btn btn-danger btn-sm" onclick="clearHistory()">기록 전체 삭제</button>
+</div>
+</div>
+</div>
+
+<script>
+const COUNTRIES = [
+  {code:'US', name:'미국', flag:'🇺🇸', payment:95, arpu:45, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'KR', name:'한국', flag:'🇰🇷', payment:92, arpu:38, sanction:false, methods:'카드, 카카오페이, 네이버페이'},
+  {code:'JP', name:'일본', flag:'🇯🇵', payment:88, arpu:42, sanction:false, methods:'카드, 편의점결제, PayPay'},
+  {code:'GB', name:'영국', flag:'🇬🇧', payment:90, arpu:40, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'DE', name:'독일', flag:'🇩🇪', payment:85, arpu:35, sanction:false, methods:'카드, PayPal, SEPA'},
+  {code:'FR', name:'프랑스', flag:'🇫🇷', payment:84, arpu:33, sanction:false, methods:'카드, PayPal'},
+  {code:'CA', name:'캐나다', flag:'🇨🇦', payment:89, arpu:37, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'AU', name:'호주', flag:'🇦🇺', payment:87, arpu:36, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'BR', name:'브라질', flag:'🇧🇷', payment:65, arpu:18, sanction:false, methods:'카드, Pix, Boleto'},
+  {code:'IN', name:'인도', flag:'🇮🇳', payment:55, arpu:12, sanction:false, methods:'UPI, 카드, 페이tm'},
+  {code:'ID', name:'인도네시아', flag:'🇮🇩', payment:50, arpu:10, sanction:false, methods:'카드, DANA, OVO'},
+  {code:'VN', name:'베트남', flag:'🇻🇳', payment:45, arpu:8, sanction:false, methods:'카드, MoMo, ZaloPay'},
+  {code:'PH', name:'필리핀', flag:'🇵🇭', payment:48, arpu:9, sanction:false, methods:'카드, GCash, PayMaya'},
+  {code:'MX', name:'멕시코', flag:'🇲🇽', payment:60, arpu:15, sanction:false, methods:'카드, OXXO, PayPal'},
+  {code:'RU', name:'러시아', flag:'🇷🇺', payment:20, arpu:25, sanction:true, methods:'제재로 결제 불가'},
+  {code:'CN', name:'중국', flag:'🇨🇳', payment:30, arpu:20, sanction:false, methods:'위챗페이, 알리페이 (해외결제 제한)'},
+  {code:'IR', name:'이란', flag:'🇮🇷', payment:5, arpu:15, sanction:true, methods:'제재로 결제 불가'},
+  {code:'KP', name:'북한', flag:'🇰🇵', payment:0, arpu:0, sanction:true, methods:'제재로 결제 불가'},
+  {code:'NG', name:'나이지리아', flag:'🇳🇬', payment:35, arpu:6, sanction:false, methods:'카드, 페이스택'},
+  {code:'EG', name:'이집트', flag:'🇪🇬', payment:30, arpu:5, sanction:false, methods:'카드, 페이스택'},
+  {code:'TR', name:'터키', flag:'🇹🇷', payment:55, arpu:12, sanction:false, methods:'카드, PayPal'},
+  {code:'SA', name:'사우디', flag:'🇸🇦', payment:70, arpu:28, sanction:false, methods:'카드, Apple Pay, STC Pay'},
+  {code:'AE', name:'UAE', flag:'🇦🇪', payment:75, arpu:35, sanction:false, methods:'카드, Apple Pay, PayPal'},
+  {code:'SG', name:'싱가포르', flag:'🇸🇬', payment:90, arpu:40, sanction:false, methods:'카드, PayPal, PayNow'},
+  {code:'TH', name:'태국', flag:'🇹🇭', payment:60, arpu:14, sanction:false, methods:'카드, TrueMoney, PromptPay'},
+  {code:'MY', name:'말레이시아', flag:'🇲🇾', payment:65, arpu:16, sanction:false, methods:'카드, Touch n Go, GrabPay'},
+  {code:'TW', name:'대만', flag:'🇹🇼', payment:80, arpu:30, sanction:false, methods:'카드, LINE Pay, JKO Pay'},
+  {code:'HK', name:'홍콩', flag:'🇭🇰', payment:85, arpu:38, sanction:false, methods:'카드, PayPal, Octopus'},
+  {code:'PL', name:'폴란드', flag:'🇵🇱', payment:75, arpu:20, sanction:false, methods:'카드, PayPal, BLIK'},
+  {code:'NL', name:'네덜란드', flag:'🇳🇱', payment:88, arpu:36, sanction:false, methods:'카드, PayPal, iDEAL'},
+  {code:'SE', name:'스웨덴', flag:'🇸🇪', payment:90, arpu:38, sanction:false, methods:'카드, PayPal, Klarna'},
+  {code:'NO', name:'노르웨이', flag:'🇳🇴', payment:89, arpu:37, sanction:false, methods:'카드, PayPal, Vipps'},
+  {code:'FI', name:'핀란드', flag:'🇫🇮', payment:88, arpu:35, sanction:false, methods:'카드, PayPal, MobilePay'},
+  {code:'DK', name:'덴마크', flag:'🇩🇰', payment:89, arpu:36, sanction:false, methods:'카드, PayPal, MobilePay'},
+  {code:'CH', name:'스위스', flag:'🇨🇭', payment:92, arpu:42, sanction:false, methods:'카드, PayPal, TWINT'},
+  {code:'AT', name:'오스트리아', flag:'🇦🇹', payment:85, arpu:34, sanction:false, methods:'카드, PayPal'},
+  {code:'BE', name:'벨기에', flag:'🇧🇪', payment:84, arpu:33, sanction:false, methods:'카드, PayPal, Bancontact'},
+  {code:'ES', name:'스페인', flag:'🇪🇸', payment:82, arpu:30, sanction:false, methods:'카드, PayPal, Bizum'},
+  {code:'IT', name:'이탈리아', flag:'🇮🇹', payment:80, arpu:28, sanction:false, methods:'카드, PayPal, Satispay'},
+  {code:'PT', name:'포르투갈', flag:'🇵🇹', payment:78, arpu:26, sanction:false, methods:'카드, PayPal, MB Way'},
+  {code:'GR', name:'그리스', flag:'🇬🇷', payment:70, arpu:22, sanction:false, methods:'카드, PayPal'},
+  {code:'CZ', name:'체코', flag:'🇨🇿', payment:75, arpu:24, sanction:false, methods:'카드, PayPal'},
+  {code:'HU', name:'헝가리', flag:'🇭🇺', payment:72, arpu:22, sanction:false, methods:'카드, PayPal'},
+  {code:'RO', name:'루마니아', flag:'🇷🇴', payment:68, arpu:18, sanction:false, methods:'카드, PayPal'},
+  {code:'UA', name:'우크라이나', flag:'🇺🇦', payment:40, arpu:8, sanction:false, methods:'카드, PayPal (제한적)'},
+  {code:'IL', name:'이스라엘', flag:'🇮🇱', payment:82, arpu:32, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'ZA', name:'남아공', flag:'🇿🇦', payment:55, arpu:12, sanction:false, methods:'카드, PayPal'},
+  {code:'AR', name:'아르헨티나', flag:'🇦🇷', payment:45, arpu:10, sanction:false, methods:'카드, Mercado Pago'},
+  {code:'CL', name:'칠레', flag:'🇨🇱', payment:65, arpu:18, sanction:false, methods:'카드, PayPal, Webpay'},
+  {code:'CO', name:'콜롬비아', flag:'🇨🇴', payment:55, arpu:12, sanction:false, methods:'카드, PSE, Mercado Pago'},
+  {code:'PE', name:'페루', flag:'🇵🇪', payment:45, arpu:8, sanction:false, methods:'카드, PayPal'},
+  {code:'NZ', name:'뉴질랜드', flag:'🇳🇿', payment:86, arpu:35, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'IE', name:'아일랜드', flag:'🇮🇪', payment:87, arpu:36, sanction:false, methods:'카드, PayPal, Apple Pay'},
+  {code:'IS', name:'아이슬란드', flag:'🇮🇸', payment:85, arpu:34, sanction:false, methods:'카드, PayPal'},
+  {code:'LU', name:'룩셈부르크', flag:'🇱🇺', payment:90, arpu:40, sanction:false, methods:'카드, PayPal'},
+  {code:'MT', name:'몰타', flag:'🇲🇹', payment:78, arpu:26, sanction:false, methods:'카드, PayPal'},
+  {code:'CY', name:'키프로스', flag:'🇨🇾', payment:75, arpu:24, sanction:false, methods:'카드, PayPal'},
+  {code:'EE', name:'에스토니아', flag:'🇪🇪', payment:82, arpu:28, sanction:false, methods:'카드, PayPal'},
+  {code:'LV', name:'라트비아', flag:'🇱🇻', payment:78, arpu:26, sanction:false, methods:'카드, PayPal'},
+  {code:'LT', name:'리투아니아', flag:'🇱🇹', payment:78, arpu:26, sanction:false, methods:'카드, PayPal'},
+  {code:'SK', name:'슬로바키아', flag:'🇸🇰', payment:75, arpu:24, sanction:false, methods:'카드, PayPal'},
+  {code:'SI', name:'슬로베니아', flag:'🇸🇮', payment:76, arpu:25, sanction:false, methods:'카드, PayPal'},
+  {code:'HR', name:'크로아티아', flag:'🇭🇷', payment:72, arpu:22, sanction:false, methods:'카드, PayPal'},
+  {code:'BG', name:'불가리아', flag:'🇧🇬', payment:68, arpu:18, sanction:false, methods:'카드, PayPal'},
+  {code:'RS', name:'세르비아', flag:'🇷🇸', payment:60, arpu:15, sanction:false, methods:'카드, PayPal'},
+  {code:'BA', name:'보스니아', flag:'🇧🇦', payment:55, arpu:12, sanction:false, methods:'카드, PayPal'},
+  {code:'ME', name:'몬테네그로', flag:'🇲🇪', payment:55, arpu:12, sanction:false, methods:'카드, PayPal'},
+  {code:'MK', name:'북마케도니아', flag:'🇲🇰', payment:55, arpu:12, sanction:false, methods:'카드, PayPal'},
+  {code:'AL', name:'알바니아', flag:'🇦🇱', payment:50, arpu:10, sanction:false, methods:'카드, PayPal'},
+  {code:'MD', name:'몰도바', flag:'🇲🇩', payment:45, arpu:8, sanction:false, methods:'카드, PayPal'},
+  {code:'BY', name:'벨라루스', flag:'🇧🇾',payment:15, arpu:10, sanction:true, methods:'제재로 결제 불가'},
+  {code:'KZ', name:'카자흐스탄', flag:'🇰🇿', payment:40, arpu:8, sanction:false, methods:'카드, PayPal'},
+  {code:'UZ', name:'우즈베키스탄', flag:'🇺🇿', payment:30, arpu:5, sanction:false, methods:'카드, PayPal'},
+  {code:'AZ', name:'아제르바이잔', flag:'🇦🇿', payment:35, arpu:6, sanction:false, methods:'카드, PayPal'},
+  {code:'GE', name:'조지아', flag:'🇬🇪', payment:40, arpu:7, sanction:false, methods:'카드, PayPal'},
+  {code:'AM', name:'아르메니아', flag:'🇦🇲', payment:35, arpu:6, sanction:false, methods:'카드, PayPal'},
+  {code:'MN', name:'몽골', flag:'🇲🇳', payment:30, arpu:5, sanction:false, methods:'카드, PayPal'},
+  {code:'NP', name:'네팔', flag:'🇳🇵', payment:25, arpu:4, sanction:false, methods:'카드, PayPal'},
+  {code:'LK', name:'스리랑카', flag:'🇱🇰', payment:30, arpu:5, sanction:false, methods:'카드, PayPal'},
+  {code:'BD', name:'방글라데시', flag:'🇧🇩', payment:25, arpu:4, sanction:false, methods:'카드, bKash'},
+  {code:'PK', name:'파키스탄', flag:'🇵🇰', payment:25, arpu:4, sanction:false, methods:'카드, JazzCash'},
+  {code:'MM', name:'미얀마', flag:'🇲🇲', payment:15, arpu:3, sanction:true, methods:'제재로 결제 불가'},
+  {code:'KH', name:'캄보디아', flag:'🇰🇭', payment:25, arpu:4, sanction:false, methods:'카드, PayPal'},
+  {code:'LA', name:'라오스', flag:'🇱🇦', payment:20, arpu:3, sanction:false, methods:'카드, PayPal'},
+  {code:'BN', name:'브루나이', flag:'🇧🇳', payment:50, arpu:10, sanction:false, methods:'카드, PayPal'},
+  {code:'MO', name:'마카오', flag:'🇲🇴', payment:60, arpu:15, sanction:false, methods:'카드, PayPal'},
+  {code:'AF', name:'아프가니스탄', flag:'🇦🇫', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'IQ', name:'이라크', flag:'🇮🇶', payment:15, arpu:5, sanction:true, methods:'제재로 결제 불가'},
+  {code:'SY', name:'시리아', flag:'🇸🇾', payment:0, arpu:0, sanction:true, methods:'제재로 결제 불가'},
+  {code:'YE', name:'예멘', flag:'🇾🇪', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'SO', name:'소말리아', flag:'🇸🇴', payment:0, arpu:0, sanction:true, methods:'제재로 결제 불가'},
+  {code:'SD', name:'수단', flag:'🇸🇩', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'LY', name:'리비아', flag:'🇱🇾', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'CU', name:'쿠바', flag:'🇨🇺', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'VE', name:'베네수엘라', flag:'🇻🇪', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'NI', name:'니카라과', flag:'🇳🇮', payment:10, arpu:3, sanction:true, methods:'제재로 결제 불가'},
+  {code:'HT', name:'아이티', flag:'🇭🇹', payment:5, arpu:2, sanction:true, methods:'제재로 결제 불가'},
+  {code:'KP2', name:'북한', flag:'🇰🇵', payment:0, arpu:0, sanction:true, methods:'제재로 결제 불가'}
+];
+
+let selectedCountries = new Set();
+
+function renderCountries(){
+  const grid = document.getElementById('countryGrid');
+  grid.innerHTML = COUNTRIES.map(c=>`
+    <div class="country-item ${selectedCountries.has(c.code)?'selected':''}" onclick="toggleCountry('${c.code}')">
+      <span class="flag">${c.flag}</span>
+      <span class="name">${c.name}</span>
+      <span class="score">${c.payment}</span>
+    </div>
+  `).join('');
+}
+
+function toggleCountry(code){
+  if(selectedCountries.has(code)) selectedCountries.delete(code);
+  else selectedCountries.add(code);
+  renderCountries();
+}
+
+function calculate(){
+  const traffic = parseInt(document.getElementById('traffic').value) || 0;
+  const conversion = parseFloat(document.getElementById('conversion').value) || 0;
+
+  if(selectedCountries.size===0){
+    alert('국가를 하나 이상 선택해주세요.');
+    return;
+  }
+  if(traffic<=0){
+    alert('예상 트래픽을 입력해주세요.');
+    return;
+  }
+
+  const results = [];
+  let deadTraffic = [];
+
+  selectedCountries.forEach(code=>{
+    const c = COUNTRIES.find(x=>x.code===code);
+    if(!c) return;
+
+    const payers = Math.round(traffic * conversion/100);
+    const revenue = Math.round(payers * c.payment/100 * c.arpu);
+    const viability = c.payment * c.arpu / 100;
+
+    results.push({...c, payers, revenue, viability});
+
+    if(c.payment < 30 || c.sanction){
+      deadTraffic.push(c);
+    }
+  });
+
+  results.sort((a,b)=>b.revenue-a.revenue);
+
+  const maxRevenue = results.length>0 ? results[0].revenue : 1;
+
+  let deadHtml = '';
+  if(deadTraffic.length>0){
+    deadHtml = `<div class="dead-traffic">
+      <span class="icon">⚠️</span><strong>죽은 트래픽 경고:</strong>
+      ${deadTraffic.map(c=>`${c.flag} ${c.name}`).join(', ')} — 제재 또는 결제 인프라 부족으로 실질 수익이 거의 없습니다.
+    </div>`;
+  }
+
+  const tableRows = results.map((r,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${r.flag} ${r.name}</td>
+      <td>${r.payment}</td>
+      <td>$${r.arpu}</td>
+      <td>${r.payers.toLocaleString()}</td>
+      <td style="color:#00d2ff;font-weight:600">$${r.revenue.toLocaleString()}</td>
+      <td>${r.sanction?'🔴 제재':r.payment<30?'🟠 낮음':'🟢 정상'}</td>
+    </tr>
+  `).join('');
+
+  const barRows = results.slice(0,10).map(r=>`
+    <div class="bar-row">
+      <span class="label">${r.flag} ${r.name}</span>
+      <div class="bar"><div class="fill" style="width:${Math.round(r.revenue/maxRevenue*100)}%;background:linear-gradient(90deg,#00d2ff,#3a7bd5)"></div></div>
+      <span class="val" style="color:#00d2ff">$${r.revenue.toLocaleString()}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('result').innerHTML = `
+    <div class="card">
+      <h2>💰 국가별 실질 수익 추정</h2>
+      ${deadHtml}
+      <table class="result-table">
+        <thead><tr><th>#</th><th>국가</th><th>결제가능성</th><th>ARPU</th><th>결제인원</th><th>예상 수익</th><th>상태</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>📊 상위 10개국 수익 비교</h2>
+      <div class="bar-chart">${barRows}</div>
+    </div>
+  `;
+
+  saveHistory({
+    date: new Date().toLocaleString('ko-KR'),
+    countries: results.length,
+    traffic,
+    topCountry: results[0]?.name || '-',
+    topRevenue: results[0]?.revenue || 0
+  });
+  renderHistory();
+}
+
+function saveHistory(record){
+  let h = JSON.parse(localStorage.getItem('viral_history')||'[]');
+  h.unshift(record);
+  if(h.length>50) h = h.slice(0,50);
+  localStorage.setItem('viral_history', JSON.stringify(h));
+}
+
+function renderHistory(){
+  const h = JSON.parse(localStorage.getItem('viral_history')||'[]');
+  const el = document.getElementById('history');
+  if(h.length===0){
+    el.innerHTML = '<div class="empty">아직 계산 기록이 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = h.map(r=>`
+    <div class="history-item" style="background:rgba(0,0,0,.2);border-radius:8px;padding:12px;margin-bottom:8px;font-size:.85rem">
+      <div class="date" style="color:#00d2ff;font-size:.75rem">${r.date}</div>
+      <div>${r.countries}개국 · 트래픽 ${r.traffic.toLocaleString()} · 1위: ${r.topCountry} ($${r.topRevenue.toLocaleString()})</div>
+    </div>
+  `).join('');
+}
+
+function clearHistory(){
+  if(confirm('모든 계산 기록을 삭제하시겠습니까?')){
+    localStorage.removeItem('viral_history');
+    renderHistory();
+  }
+}
+
+renderCountries();
+renderHistory();
+</script>
+</body>
+</html>
